@@ -87,6 +87,18 @@ input[type=text], input[type=search], input[type=number], select, textarea {
   min-height: 44px; width: 100%; outline: none; font-size: max(16px, 1em); /* 16px+ stops iOS zooming */
 }
 input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+/* selects: drop the native (glossy on Safari/iOS) control and draw a themed chevron */
+select {
+  -webkit-appearance: none; appearance: none; cursor: pointer; padding-right: 38px; text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.7 8.8 12 14.1l5.3-5.3 1.4 1.4-6.7 6.7-6.7-6.7z' fill='%239aa3b5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 18px;
+  transition: border-color .15s, background-color .15s;
+}
+select:hover { background-color: var(--surface-2); }
+select:disabled { opacity: .5; cursor: default; }
+select::-ms-expand { display: none; }
+option { background: var(--surface); color: var(--text); }
+select:focus-visible { box-shadow: 0 0 0 3px rgba(124,140,255,.25); }
 textarea { min-height: 80px; resize: vertical; }
 .section { margin-top: clamp(24px, 3vw, 44px); }
 .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
@@ -171,8 +183,8 @@ textarea { min-height: 80px; resize: vertical; }
 .linkish { background: none; border: 0; color: var(--accent); padding: 0; cursor: pointer; font-weight: 600; }
 .show-cols { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 25vw, 380px);
   gap: clamp(20px, 2.5vw, 40px); margin-top: clamp(20px, 2.5vw, 32px); align-items: start; }
-.panel { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px;
-  display: flex; flex-direction: column; gap: 12px; }
+.panel { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(16px, 1.6vw, 22px);
+  display: flex; flex-direction: column; gap: 14px; }
 .panel h3 { font-size: 1em; }
 .side { position: sticky; top: 80px; }
 .seg { display: inline-flex; background: var(--surface); border-radius: 999px; padding: 3px; border: 1px solid var(--line); }
@@ -271,6 +283,14 @@ body.watching .topbar { display: none; }
 /* ---------- settings ---------- */
 .settings { max-width: 760px; display: flex; flex-direction: column; gap: 18px; margin-top: 18px; }
 .settings .panel p { margin: 0; }
+/* settings: sub-sections inside a panel get room above, and a hint hugs what it explains */
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack:empty { display: none; }
+.settings .hint { color: var(--faint); font-size: .85em; margin-top: -8px; }
+.settings .sub-h { margin: 6px 0 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.settings .stack > .sub-h:first-child { margin-top: 0; }
+.settings .sub-h + .hint { margin-top: -10px; }
+.settings .two, .settings .three { align-items: end; } /* a label that wraps doesn't push its field out of line */
 .settings ol { margin: 0; padding-left: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
 .settings code { background: var(--surface-2); padding: 2px 6px; border-radius: 6px; font-size: 0.87em; word-break: break-all; }
 .who { display: flex; align-items: center; gap: 12px; }
@@ -825,7 +845,7 @@ body.tv .row-arrow, body.tv .card-more { display: none; }
 body.tv .tabbar { display: none; }
 
 /* ---------- watch order ---------- */
-.order-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: clamp(20px, 2.5vw, 32px); }
+.order-bar { position: relative; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: clamp(20px, 2.5vw, 32px); }
 .order-bar .seg button { padding: 6px 14px; }
 .ogrid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--grid-min), 1fr)); gap: 22px var(--row-gap); }
 .ogrid li { position: relative; }

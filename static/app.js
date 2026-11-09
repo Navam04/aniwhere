@@ -183,7 +183,7 @@ function closeSheet() {
  * items: [{ label, sub, icon, checked, danger, onClick, keep }] — onClick may return a promise;
  * `keep` leaves the sheet open (for sub-pages). Strings render as section labels.
  */
-function openSheet({ title, sub, items, at }) {
+function openSheet({ title, sub, items, at, width }) {
   closeSheet();
   const wrap = document.createElement('div');
   const asSheet = isTouch() || window.innerWidth < 640 || !at;
@@ -197,6 +197,7 @@ function openSheet({ title, sub, items, at }) {
   const place = () => {
     if (asSheet) return;
     const s = $('.sheet', wrap);
+    if (width) s.style.width = `${width}px`;
     const r = s.getBoundingClientRect();
     s.style.left = `${Math.min(Math.max(8, at.x), window.innerWidth - r.width - 8)}px`;
     s.style.top = `${Math.max(8, Math.min(at.y, window.innerHeight - r.height - 8))}px`;
@@ -204,7 +205,7 @@ function openSheet({ title, sub, items, at }) {
   const render = list => {
     body.innerHTML = list.map((it, i) => typeof it === 'string' ? `<div class="sheet-label">${esc(it)}</div>`
       : `<button class="sheet-item ${it.danger ? 'danger' : ''} ${it.checked ? 'checked' : ''}" data-i="${i}" role="menuitem">
-          ${it.icon || '<i class="sheet-gap"></i>'}<span>${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>
+          ${it.icon ?? '<i class="sheet-gap"></i>'}<span>${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>
           ${it.checked ? I.check : ''}</button>`).join('');
     $$('.sheet-item', body).forEach(b => b.onclick = async () => {
       const it = list[+b.dataset.i];
@@ -218,7 +219,60 @@ function openSheet({ title, sub, items, at }) {
   requestAnimationFrame(() => wrap.classList.add('open'));
   return { render };
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSheet();
+  // arrow keys move between menu items
+  if (sheetEl && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    const items = $$('.sheet-item', sheetEl);
+    if (!items.length) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement);
+    items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+  }
+});
+
+// Dropdowns open the app's own menu (a popover under the field, or a bottom sheet on touch) instead of the
+// system one, which ignores the theme (Safari's especially). The <select> keeps the value and fires 'change'.
+function openSelectMenu(sel) {
+  if (sel.disabled) return;
+  const r = sel.getBoundingClientRect();
+  sel.focus({ preventScroll: true });
+  openSheet({
+    at: { x: r.left, y: r.bottom + 6 },
+    width: Math.max(r.width, 200),
+    items: [...sel.options].map(o => ({
+      label: o.textContent, icon: '', checked: o.selected,
+      onClick: () => {
+        if (sel.value !== o.value) { sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+        sel.focus({ preventScroll: true });
+      },
+    })),
+  });
+  (sheetEl && ($('.sheet-item.checked', sheetEl) || $('.sheet-item', sheetEl)))?.focus({ preventScroll: true });
+}
+document.addEventListener('mousedown', e => {
+  const sel = e.target.closest?.('select');
+  if (!sel || e.button !== 0) return;
+  e.preventDefault();
+  openSelectMenu(sel);
+});
+let selTouch = null;
+document.addEventListener('touchstart', e => {
+  const sel = e.target.closest?.('select');
+  selTouch = sel ? { sel, x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+}, { passive: true });
+document.addEventListener('touchend', e => {
+  const t = selTouch, p = e.changedTouches[0];
+  selTouch = null;
+  if (!t || Math.hypot(p.clientX - t.x, p.clientY - t.y) > 10) return; // a scroll, not a tap
+  e.preventDefault(); // stops the system picker
+  openSelectMenu(t.sel);
+});
+document.addEventListener('keydown', e => {
+  const sel = e.target;
+  if (sel?.tagName !== 'SELECT' || sheetEl) return;
+  if ([' ', 'Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); openSelectMenu(sel); }
+});
 window.addEventListener('hashchange', closeSheet);
 
 // Quick menu for any poster: status, score, play, remove.
@@ -1820,7 +1874,7 @@ async function viewSettings(stale) {
       <section class="panel"><h3>Profile</h3>
         <p class="muted">Signed in as <strong>${esc(s.profile?.me || '')}</strong>${s.profile?.is_owner ? ' (owner)' : ''}.
           Your lists, progress, history and settings are your own; nobody else using this app sees them.</p>
-        ${s.profile?.is_owner ? '<div id="people"></div>' : ''}</section>
+        ${s.profile?.is_owner ? '<div id="people" class="stack"></div>' : ''}</section>
       <section class="panel"><h3>AniList</h3>${anilistHtml}</section>
       <section class="panel"><h3>New episode notifications</h3>${pushHtml}</section>
       <section class="panel"><h3>Player</h3>
@@ -1833,18 +1887,18 @@ async function viewSettings(stale) {
           <div class="field"><label for="ps-set">Speed on this device</label>
             <select id="ps-set">${SPEEDS.map(x => `<option value="${x}" ${sp === x ? 'selected' : ''}>${x === 1 ? 'Normal' : `${x}x`}</option>`).join('')}</select></div>
         </div>
+        <p class="hint">Each episode plays at the best quality it has up to this limit. The player's gear menu lists exactly what an episode offers.</p>
         <label class="switch-row"><span>TV mode on this device<small>Bigger text and cards, and arrow keys / a remote move between items. Or open the app with ?tv=1.</small></span>
           <input type="checkbox" class="sw-input" id="tv-set" ${tvMode() ? 'checked' : ''}><i class="sw"></i></label>
         <div class="three">${[['size', 'Subtitle size', SUB_SIZES], ['bg', 'Subtitle background', SUB_BGS], ['pos', 'Subtitle position', SUB_POS]].map(([k, label, opts]) =>
           `<div class="field"><label for="sub-${k}">${label}</label><select id="sub-${k}" data-sub="${k}">${Object.entries(opts).map(([v, [l]]) =>
             `<option value="${v}" ${subPrefs()[k] === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`).join('')}</div>
-        <p class="faint" style="font-size:.85em;margin-top:-4px">Each episode plays at the best quality it has up to this limit. The player's gear menu lists exactly what an episode offers.</p>
         <p class="muted">Shows play dubbed by default and fall back to subtitled when there's no dub. Switch any show to Sub on its page; that choice is remembered.</p></section>
       <section class="panel"><h3>Stream source</h3>
         <p class="muted">Streams are found with ani-cli ${esc(s.ani_cli_version || '(not found)')}. It updates itself daily; if episodes stop loading, update it now.</p>
         <div class="actions"><button class="btn" id="upd">Update ani-cli</button></div></section>
-      <section class="panel"><h3>Server health</h3><div id="health">${spinner()}</div></section>
-      ${s.profile?.is_owner ? `<section class="panel"><h3>Episodes kept on the server</h3><div id="cachebox">${spinner()}</div></section>` : ''}
+      <section class="panel"><h3>Server health</h3><div id="health" class="stack">${spinner()}</div></section>
+      ${s.profile?.is_owner ? `<section class="panel"><h3>Episodes kept on the server</h3><div id="cachebox" class="stack">${spinner()}</div></section>` : ''}
       <section class="panel"><h3>About</h3>
         <p class="muted">Aniwhere ${esc(s.version || '')}: watch anime anywhere, from your own server.</p>
         <p class="muted">Made by <a class="linkish" href="https://navam.dev" target="_blank" rel="noopener">navam.dev</a> ·
@@ -1866,7 +1920,7 @@ async function viewSettings(stale) {
         ${p.removable ? `<button class="linkish" data-rm="${esc(p.login)}">Remove</button>` : p.owner ? '' : '<span class="faint" title="Set in the server\'s service file">server setting</span>'}</li>`).join('')}</ul>
       <div class="add-person"><input type="text" id="np" placeholder="their Tailscale login, e.g. name@gmail.com" autocomplete="off" inputmode="email">
         <button class="btn" id="npadd">Add</button></div>
-      <p class="faint" style="font-size:.85em;margin:0">They also need to be on your tailnet (share this server with them in the Tailscale admin console). Removing someone keeps their data in case you add them back.</p>`;
+      <p class="hint">They also need to be on your tailnet (share this server with them in the Tailscale admin console). Removing someone keeps their data in case you add them back.</p>`;
     $('#npadd').onclick = e => busy(e.target, async () => {
       const login = $('#np').value.trim();
       if (!login) return;
@@ -1901,7 +1955,7 @@ async function viewSettings(stale) {
       <dt>${dot(h.disk.free > 1e9)}Disk</dt><dd>${bytes(h.disk.free)} free of ${bytes(h.disk.total)}</dd>
       <dt>${dot(true)}Running for</dt><dd>${until(h.uptime)}</dd></dl>
       ${h.backups ? `<h4 class="sub-h">Backups</h4>
-        <p class="faint" style="margin:0;font-size:.85em">Made every night; the last 7 are kept on the server.</p>
+        <p class="hint">Made every night; the last 7 are kept on the server.</p>
         <ul class="people">${h.backups.length ? h.backups.map(b => `<li><span>${esc(new Date(b.at * 1000).toLocaleString())} <em>${bytes(b.size)}</em></span>
           <a class="linkish" href="/api/backups/${encodeURIComponent(b.name)}" download>Download</a></li>`).join('') : '<li class="faint">No backups yet</li>'}</ul>
         <div class="actions"><button class="btn" id="bknow">Back up now</button></div>` : ''}
@@ -1926,14 +1980,14 @@ async function viewSettings(stale) {
       <label class="switch-row"><span>Keep upcoming episodes<small>Uses disk space on the server.</small></span>
         <input type="checkbox" class="sw-input" id="c-on" ${st.enabled ? 'checked' : ''}><i class="sw"></i></label>
       <div class="two">
-        <div class="field"><label for="c-limit">Space to use</label><select id="c-limit">${[1, 3, 5, 10, 20, 50, 100].map(g =>
+        <div class="field"><label for="c-limit">Space to use</label><select id="c-limit">${[...new Set([1, 3, 5, 10, 20, 50, 100, st.limit_gb])].sort((a, b) => a - b).map(g =>
           `<option value="${g}" ${st.limit_gb === g ? 'selected' : ''}>${g} GB</option>`).join('')}</select></div>
         <div class="field"><label for="c-q">Quality</label><select id="c-q">${[1080, 720, 480].map(q =>
           `<option value="${q}" ${st.quality === q ? 'selected' : ''}>${q}p${q === 1080 ? ' (about 400 MB an episode)' : q === 720 ? ' (about 250 MB)' : ' (about 120 MB)'}</option>`).join('')}</select></div>
       </div>
       <div class="coll-progress"><div class="pbar"><i style="width:${Math.min(100, c.usage / limit * 100)}%"></i></div>
         <span>${bytes(c.usage)} of ${st.limit_gb} GB used · ${bytes(c.disk.free)} free on the server</span></div>
-      <p class="faint" style="margin:0;font-size:.85em">${c.status.running ? `Downloading now${c.status.current ? `: ${esc(c.status.current)}` : ''}…`
+      <p class="hint">${c.status.running ? `Downloading now${c.status.current ? `: ${esc(c.status.current)}` : ''}…`
         : c.status.last_run ? `Last run ${ago(c.status.last_run)}${c.status.done ? ` · ${c.status.done} downloaded` : ''}` : 'Runs every night.'}
         ${c.status.last_error ? `<br>Last problem: ${esc(c.status.last_error)}` : ''}</p>
       ${c.items.length ? `<ul class="people">${c.items.map(e => `<li><span>${esc(e.title)} · ${/^\d/.test(e.episode) ? 'Episode ' : ''}${esc(e.episode)} · ${e.mode === 'dub' ? 'Dub' : 'Sub'}
