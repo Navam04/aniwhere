@@ -1,0 +1,45 @@
+# Aniwhere with Tailscale. Put this file and a .env (copy .env.example) in one folder, then: docker compose up -d
+# The app shares the Tailscale container's network, so it's only reachable over your tailnet, with HTTPS.
+services:
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: ${TS_HOSTNAME:-anime}
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY:-}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+      # Without an auth key you sign in with a link; give that 10 minutes instead of the default 60s, after which
+      # the container restarts with a new link. Once signed in, restarts reuse the saved login.
+      - TS_BOOT_TIMEOUT=10m
+      - TS_AUTH_ONCE=true
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    configs:
+      - source: serve
+        target: /config/serve.json
+    restart: unless-stopped
+
+  aniwhere:
+    image: ghcr.io/navam04/aniwhere:${ANIWHERE_VERSION:-latest}
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    env_file: .env
+    volumes:
+      - aniwhere-data:/data
+    restart: unless-stopped
+
+configs:
+  serve:
+    content: |
+      {
+        "TCP": { "443": { "HTTPS": true }, "80": { "HTTP": true } },
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8000" } } },
+          "$${TS_CERT_DOMAIN}:80": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8002" } } }
+        }
+      }
+
+volumes:
+  tailscale-state:
+  aniwhere-data:

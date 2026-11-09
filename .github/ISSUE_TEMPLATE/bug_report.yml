@@ -1,0 +1,39 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Aniwhere version
+      description: Settings → About
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install type
+      options: [Docker, Manual]
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: iPhone 15, home-screen app / Chrome on Windows
+  - type: textarea
+    id: health
+    attributes:
+      label: Server health and logs
+      description: >
+        What Settings → Server health shows (including the ani-cli version and recent errors), and any relevant lines
+        from `docker compose logs aniwhere` or `journalctl -u anime`. Remove anything private.
+      render: text

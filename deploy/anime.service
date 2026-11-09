@@ -1,0 +1,28 @@
+[Unit]
+Description=Aniwhere (anime web app)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=anime
+Group=anime
+WorkingDirectory=/opt/anime
+Environment=ANIME_DATA=/var/lib/anime
+Environment=ANIME_BRIDGE=/opt/anime/bridge.sh
+Environment=ANI_CLI_PATH=/opt/ani-cli-src/ani-cli
+Environment=ANI_CLI_DIR=/opt/ani-cli-src
+# Server-specific settings (ANIME_HOST, ANIME_ALLOWED_LOGINS, ANIME_PUSH_SUBJECT) live in this file,
+# written by deploy/install.sh. See deploy/anime.env.example.
+EnvironmentFile=/etc/anime/anime.env
+Environment=HOME=/var/lib/anime
+# Only reachable through `tailscale serve` (HTTPS on the tailnet), never on the LAN directly.
+ExecStart=/opt/anime/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --no-access-log
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/anime /opt/ani-cli-src /tmp
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

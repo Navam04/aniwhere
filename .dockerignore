@@ -1,0 +1,11 @@
+.git
+.github
+docs
+venv
+.venv
+__pycache__
+*.pyc
+*.db
+static/vendor
+static/icons
+.env

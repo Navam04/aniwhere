@@ -1,0 +1,17 @@
+[Unit]
+Description=Aniwhere: redirect plain HTTP (http://anime/) to HTTPS
+After=network-online.target
+
+[Service]
+User=anime
+Group=anime
+EnvironmentFile=/etc/anime/anime.env
+ExecStart=/usr/bin/python3 /opt/anime/redirect.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
