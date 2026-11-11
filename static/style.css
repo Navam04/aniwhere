@@ -260,8 +260,10 @@ textarea { min-height: 80px; resize: vertical; }
 /* ---------- watch page ---------- */
 body.watching main { max-width: none; padding: 0; }
 body.watching .topbar { display: none; }
-.player-wrap { background: #000; display: flex; justify-content: center; padding-top: var(--safe-t); }
-.player, .player-ph, .recover { width: 100%; max-width: calc((100svh - 120px) * 16 / 9); max-height: calc(100svh - 120px);
+/* plain block, not flex: Safari kept a stale (zero) size for the player after rotating landscape -> portrait,
+   because its size came from flex + aspect-ratio and all its content is absolutely positioned */
+.player-wrap { background: #000; display: block; padding-top: var(--safe-t); }
+.player, .player-ph, .recover { margin: 0 auto; width: 100%; max-width: calc((100svh - 120px) * 16 / 9); max-height: calc(100svh - 120px);
   aspect-ratio: 16/9; background: #000; }
 .player-ph { display: grid; place-items: center; }
 .watch-bar { max-width: 1400px; margin: 0 auto; padding: 14px var(--pad-r) 14px var(--pad-l); display: flex; flex-wrap: wrap;
@@ -358,7 +360,8 @@ body.watching .topbar { display: none; }
   .side { position: static; order: 0; }
   /* video fills the screen height; title bar sits below it */
   .player-wrap { padding-top: 0; }
-  .player, .player-ph, .recover { height: 100svh; max-height: 100svh; width: auto; max-width: 100%; }
+  .player, .player-ph, .recover { height: 100svh; max-height: 100svh; width: min(100%, 100svh * 16 / 9); max-width: none;
+    aspect-ratio: auto; }
 }
 
 /* =====================================================================

@@ -3,6 +3,13 @@
 All notable changes to Aniwhere. Versions follow [Semantic Versioning](https://semver.org): a major version can need
 manual steps when updating (they're listed under its heading), minor versions add features, patches fix things.
 
+## [1.0.2] - 2026-11-10
+
+Fixes.
+
+- Watching on a phone: rotating to landscape and back to portrait no longer makes the video player disappear
+  (Safari kept a stale size for it)
+
 ## [1.0.1] - 2026-11-09
 
 Fixes.
