@@ -114,6 +114,10 @@ async def find_match(media):
             log.info("source search failed for %r: %s", title, ex)
     if not candidates:
         return None
+    # Miruro ids start with the AniList id ("<anilist>:<miruro>:<mal>"), so an exact match needs no guessing.
+    for sid, stitle in candidates.items():
+        if sid.split(":", 1)[0] == str(media["id"]):
+            return {"source_id": sid, "source_title": stitle, "verified": 1}
     ranked = sorted(candidates.items(), key=lambda kv: _similarity(kv[1], titles), reverse=True)
     mal = media.get("idMal")
     if mal:

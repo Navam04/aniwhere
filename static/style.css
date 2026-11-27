@@ -913,3 +913,4 @@ body.tv .tabbar { display: none; }
 .as-table table { border-collapse: collapse; margin-top: 6px; }
 .as-table td, .as-table th { padding: 4px 16px 4px 0; text-align: left; border-bottom: 1px solid var(--line); }
 .recap .section-head select { width: auto; }
+.people .hdot { display: inline-block; margin-right: 8px; vertical-align: middle; }

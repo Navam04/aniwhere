@@ -158,6 +158,10 @@ def init():
             "SELECT user, anilist_id, episode, position, duration, completed, updated_at FROM watch "
             "WHERE completed=1 OR position>10")
         set_setting("history_seeded", 1)
+    # ani-cli moved from HiAnime to Miruro: old HiAnime show ids (slugs like "one-piece-1") no longer work.
+    # Forget them so each show is matched again on first use; the show's sub/dub choice is kept.
+    run("UPDATE mapping SET source_id=NULL, source_title=NULL, verified=0 "
+        "WHERE source_id IS NOT NULL AND source_id NOT GLOB '[0-9]*:*:*'")
 
 
 def users():

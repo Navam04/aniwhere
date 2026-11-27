@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import anilist, cache, collections, db, episodes, filler, health, hls, push, skip, source, watch_order
+from . import alerts, anilist, cache, collections, db, episodes, filler, health, hls, push, skip, source, watch_order
 from .anilist import AniListError
 from .source import SourceError
 
@@ -33,7 +33,8 @@ async def lifespan(_app):
     db.init()
     collections.init()
     filler.init()
-    tasks = [asyncio.create_task(background()), asyncio.create_task(collections.keep_fresh())]
+    tasks = [asyncio.create_task(background()), asyncio.create_task(collections.keep_fresh()),
+             asyncio.create_task(alerts.keep_watch())]
     yield
     for t in tasks:
         t.cancel()
@@ -969,7 +970,39 @@ async def server_health():
     if db.user() == db.OWNER:
         out["errors"] = list(health.recent)[-15:][::-1]
         out["backups"] = health.backups()
+        out["alerts"] = {"enabled": alerts.enabled(), "checks": alerts.checks(), "devices": push.count()}
     return out
+
+
+class AlertSettings(BaseModel):
+    enabled: bool
+
+
+@app.put("/api/health/alerts")
+async def health_alerts_settings(body: AlertSettings):
+    _owner_only()
+    alerts.set_enabled(body.enabled)
+    return {"enabled": alerts.enabled()}
+
+
+@app.post("/api/health/alerts/check")
+async def health_alerts_check():
+    """Run every check now (the stream-source probe included) and return the results."""
+    _owner_only()
+    st = alerts._state()
+    if "source" in st:
+        st["source"]["checked"] = 0  # force the probe
+        db.set_json("health_alerts_state", st)
+    await alerts.run_once()
+    return {"enabled": alerts.enabled(), "checks": alerts.checks()}
+
+
+@app.post("/api/health/alerts/test")
+async def health_alerts_test():
+    _owner_only()
+    sent = await push.send_all("Aniwhere health alerts are on",
+                               "You'll get a message here if streaming, disk space or backups break.", "/#/settings")
+    return {"sent": sent}
 
 
 @app.post("/api/backups")

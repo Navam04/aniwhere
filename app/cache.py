@@ -110,15 +110,15 @@ def cached_episodes(anilist_id, mode):
 
 
 # downloading ---------------------------------------------------------------------------------
-async def _get(url, refr, binary=False):
-    r = await hls.client.get(url, headers={"Referer": refr or ""})
+async def _get(url, headers, binary=False):
+    r = await hls.client.get(url, headers=headers)
     r.raise_for_status()
     return r.content if binary else r.text
 
 
-async def _download_playlist(url, refr, folder, prefix, quality):
+async def _download_playlist(url, headers, folder, prefix, quality):
     """Copy a media playlist and everything it references into folder; returns bytes written."""
-    text = await _get(url, refr)
+    text = await _get(url, headers)
     if "#EXT-X-STREAM-INF" in text:  # a master playlist: follow the best variant at or under `quality`
         variants, res = [], None
         for line in text.splitlines():
@@ -132,7 +132,7 @@ async def _download_playlist(url, refr, folder, prefix, quality):
         pick = next((v for v in variants if v[0] <= quality), variants[-1] if variants else None)
         if not pick:
             raise ValueError("empty master playlist")
-        return await _download_playlist(pick[1], refr, folder, prefix, quality)
+        return await _download_playlist(pick[1], headers, folder, prefix, quality)
 
     out, size, n = [], 0, 0
     sem = asyncio.Semaphore(4)
@@ -143,7 +143,7 @@ async def _download_playlist(url, refr, folder, prefix, quality):
         async with sem:
             for attempt in range(3):
                 try:
-                    data = await _get(seg_url, refr, binary=True)
+                    data = await _get(seg_url, headers, binary=True)
                     break
                 except httpx.HTTPError:
                     if attempt == 2:
@@ -219,12 +219,13 @@ async def _save(anilist_id, episode, mode, res, fallback_for=None):
     tmp = final.with_name(final.name + ".part")
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
+    headers = hls.upstream_headers(res)
     try:
-        size = await _download_playlist(url, res.get("refr"), tmp, "video", quality)
+        size = await _download_playlist(url, headers, tmp, "video", quality)
         master = ["#EXTM3U", "#EXT-X-VERSION:3"]
         audio_attr = ""
         if res.get("audio"):
-            size += await _download_playlist(res["audio"], res.get("refr"), tmp, "audio", quality)
+            size += await _download_playlist(res["audio"], headers, tmp, "audio", quality)
             master.append('#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Audio",DEFAULT=YES,AUTOSELECT=YES,URI="audio.m3u8"')
             audio_attr = ',AUDIO="aud"'
         bw, resolution = hls.BANDWIDTH.get(str(pick or ""), (3_000_000, None))
@@ -233,7 +234,7 @@ async def _save(anilist_id, episode, mode, res, fallback_for=None):
         sub = False
         if res.get("sub"):
             try:
-                (tmp / "sub.vtt").write_bytes(await _get(res["sub"], res.get("refr"), binary=True))
+                (tmp / "sub.vtt").write_bytes(hls.to_vtt(await _get(res["sub"], headers, binary=True)))
                 sub = True
             except httpx.HTTPError:
                 pass

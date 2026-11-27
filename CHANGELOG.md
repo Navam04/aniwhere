@@ -3,6 +3,17 @@
 All notable changes to Aniwhere. Versions follow [Semantic Versioning](https://semver.org): a major version can need
 manual steps when updating (they're listed under its heading), minor versions add features, patches fix things.
 
+## [1.1.0] - 2026-11-27
+
+- Fixed: streaming stopped working after ani-cli switched its provider from HiAnime to Miruro. The bridge now
+  uses ani-cli's Miruro functions, and shows are matched again automatically (Miruro ids include the AniList id,
+  so matches are exact). Your sub/dub choice per show is kept.
+- Fixed: stream requests now send the Origin header the new hosts require, and SRT and ASS subtitles are
+  converted to WebVTT.
+- New: health alerts. The server checks streaming (a real search + episode list + stream lookup), disk space and
+  backups every few minutes and sends the owner a push notification when one breaks and when it's fixed.
+  Settings → Server health has an on/off switch, "Check now" and "Send test alert".
+
 ## [1.0.2] - 2026-11-10
 
 Fixes.

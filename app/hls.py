@@ -1,5 +1,5 @@
 """HLS proxy. The browser only talks to this server; the server fetches playlists and
-segments from the stream host (adding the Referer it requires) and rewrites playlist URLs."""
+segments from the stream host (adding the Referer/Origin it requires) and rewrites playlist URLs."""
 import base64
 import hashlib
 import hmac
@@ -68,6 +68,64 @@ def _unwrap(tok, u, sig):
     return url
 
 
+def upstream_headers(res):
+    """Headers the stream host wants: its Referer and, when the source gives one, its Origin."""
+    headers = {"Referer": res.get("refr") or ""}
+    if res.get("origin"):
+        headers["Origin"] = res["origin"]
+    return headers
+
+
+_SRT_TIME = re.compile(r"(\d{2}:\d{2}:\d{2}),(\d{3})")
+
+
+def to_vtt(data):
+    """Browsers only show WebVTT. Some hosts serve SRT (with ASS tags like {\\an8}); convert those."""
+    text = data.decode("utf-8-sig", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    if text.lstrip().startswith("WEBVTT"):
+        return text.encode()
+    if "[Events]" in text and "Dialogue:" in text:
+        return _ass_to_vtt(text)
+    text = _SRT_TIME.sub(r"\1.\2", text)
+    text = re.sub(r"\{\\[^}]*\}", "", text)
+    return ("WEBVTT\n\n" + text.strip() + "\n").encode()
+
+
+def _ass_time(s):
+    h, m, rest = s.strip().split(":")
+    sec, cs = (rest.split(".") + ["0"])[:2]
+    return f"{int(h):02d}:{int(m):02d}:{int(sec):02d}.{int(cs.ljust(2, '0')[:2]) * 10:03d}"
+
+
+def _ass_to_vtt(text):
+    """ASS/SSA (Aegisub) subtitles: keep the dialogue lines' timing and text, drop styling and drawings."""
+    fields, cues = None, []
+    for line in text.split("\n"):
+        if line.startswith("Format:") and fields is None and cues == [] and "Text" in line:
+            fields = [f.strip() for f in line[7:].split(",")]
+        elif line.startswith("Dialogue:") and fields:
+            parts = line[9:].split(",", len(fields) - 1)
+            if len(parts) < len(fields):
+                continue
+            row = dict(zip(fields, parts))
+            body = row.get("Text", "")
+            if re.search(r"\\p[1-9]", body):  # vector drawing, not text
+                continue
+            body = re.sub(r"\{[^}]*\}", "", body).replace("\\N", "\n").replace("\\n", "\n").replace("\\h", " ")
+            body = "\n".join(x.strip() for x in body.split("\n") if x.strip())
+            if not body:
+                continue
+            try:
+                cues.append((_ass_time(row["Start"]), _ass_time(row["End"]), body))
+            except (KeyError, ValueError):
+                continue
+    cues = sorted(set(cues))  # typeset titles are often several identical layers
+    out = ["WEBVTT", ""]
+    for start, end, body in cues:
+        out += [f"{start} --> {end}", body, ""]
+    return "\n".join(out).encode()
+
+
 def quality_of(label):
     q = re.sub(r"\D", "", label or "")
     return int(q) if q else None
@@ -120,7 +178,7 @@ async def playlist(tok, u, sig):
     s = _session(tok)
     url = _unwrap(tok, u, sig)
     try:
-        r = await client.get(url, headers={"Referer": s.get("refr", "")})
+        r = await client.get(url, headers=upstream_headers(s))
     except httpx.HTTPError as ex:
         raise HTTPException(502, f"Stream host unreachable: {ex.__class__.__name__}")
     if r.status_code != 200:
@@ -152,7 +210,7 @@ async def _strip_disguise(chunks):
 async def segment(tok, u, sig, range_header=None):
     s = _session(tok)
     url = _unwrap(tok, u, sig)
-    headers = {"Referer": s.get("refr", "")}
+    headers = upstream_headers(s)
     if range_header:
         headers["Range"] = range_header
     try:
@@ -184,9 +242,9 @@ async def subtitles(tok):
     if not s.get("sub"):
         raise HTTPException(404, "No subtitles")
     try:
-        r = await client.get(s["sub"], headers={"Referer": s.get("refr", "")})
+        r = await client.get(s["sub"], headers=upstream_headers(s))
     except httpx.HTTPError:
         raise HTTPException(502, "Subtitle host unreachable")
     if r.status_code != 200:
         raise HTTPException(502, f"Subtitle host returned HTTP {r.status_code}")
-    return Response(r.content, media_type="text/vtt; charset=utf-8", headers={"Cache-Control": "private, max-age=3600"})
+    return Response(to_vtt(r.content), media_type="text/vtt; charset=utf-8", headers={"Cache-Control": "private, max-age=3600"})

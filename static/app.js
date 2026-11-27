@@ -1954,6 +1954,14 @@ async function viewSettings(stale) {
       <dt>${dot(col.built ? true : null)}Collections</dt><dd>${col.count} collections · ${col.building ? 'building now' : col.built ? `built ${ago(col.built)}` : 'not built yet'}</dd>
       <dt>${dot(h.disk.free > 1e9)}Disk</dt><dd>${bytes(h.disk.free)} free of ${bytes(h.disk.total)}</dd>
       <dt>${dot(true)}Running for</dt><dd>${until(h.uptime)}</dd></dl>
+      ${h.alerts ? `<h4 class="sub-h">Health alerts</h4>
+        <label class="switch-row"><span>Notify me when something breaks<small>Checks streaming, disk space and backups every few minutes,
+          and sends a notification to your devices when one fails and when it's fixed.${h.alerts.devices ? '' : ' Turn on notifications on this device first.'}</small></span>
+          <input type="checkbox" class="sw-input" id="al-on" ${h.alerts.enabled ? 'checked' : ''}><i class="sw"></i></label>
+        <ul class="people">${h.alerts.checks.map(c => `<li><span>${dot(c.ok)}${esc(c.label)}
+          <em>${c.checked ? `${esc(c.detail || '')} · checked ${ago(c.checked)}${c.ok === false && c.since ? ` · failing since ${ago(c.since)}` : ''}` : 'Not checked yet'}</em></span></li>`).join('')}</ul>
+        <div class="actions"><button class="btn ghost small" id="al-check">Check now</button>
+          <button class="btn ghost small" id="al-test" ${h.alerts.devices ? '' : 'disabled'}>Send test alert</button></div>` : ''}
       ${h.backups ? `<h4 class="sub-h">Backups</h4>
         <p class="hint">Made every night; the last 7 are kept on the server.</p>
         <ul class="people">${h.backups.length ? h.backups.map(b => `<li><span>${esc(new Date(b.at * 1000).toLocaleString())} <em>${bytes(b.size)}</em></span>
@@ -1965,6 +1973,18 @@ async function viewSettings(stale) {
     const bk = $('#bknow');
     if (bk) bk.onclick = () => busy(bk, async () => { await api('/api/backups', { method: 'POST' }); toast('Backup made'); paintHealth(); });
     $('#hrefresh').onclick = paintHealth;
+    const alOn = $('#al-on');
+    if (alOn) {
+      alOn.onchange = async e => {
+        try { await api('/api/health/alerts', { method: 'PUT', body: { enabled: e.target.checked } }); toast(e.target.checked ? 'Health alerts on' : 'Health alerts off'); }
+        catch (err) { toast(err.message); e.target.checked = !e.target.checked; }
+      };
+      $('#al-check').onclick = e => busy(e.target, async () => { await api('/api/health/alerts/check', { method: 'POST' }); paintHealth(); });
+      $('#al-test').onclick = e => busy(e.target, async () => {
+        const r = await api('/api/health/alerts/test', { method: 'POST' });
+        toast(r.sent ? `Sent to ${r.sent} device${r.sent > 1 ? 's' : ''}` : 'No devices got it');
+      });
+    }
   }
   paintHealth();
 
