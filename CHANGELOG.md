@@ -3,6 +3,13 @@
 All notable changes to Aniwhere. Versions follow [Semantic Versioning](https://semver.org): a major version can need
 manual steps when updating (they're listed under its heading), minor versions add features, patches fix things.
 
+## [1.3.1] - 2026-11-27
+
+- Changed (computers, tablets and landscape screens): on a show's page the My list panel (status, episodes
+  watched, score, notes) stays in its place beside the episodes instead of following you down the page, and
+  Related and More like this now run across the full width of the page underneath. Episodes in the list
+  have more room around them. Phones are unchanged.
+
 ## [1.3.0] - 2026-11-27
 
 - New: Settings → New episode notifications says whether this device gets notifications, with a Turn on / Turn off

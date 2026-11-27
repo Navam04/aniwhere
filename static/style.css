@@ -186,7 +186,12 @@ textarea { min-height: 80px; resize: vertical; }
 .panel { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(16px, 1.6vw, 22px);
   display: flex; flex-direction: column; gap: 14px; }
 .panel h3 { font-size: 1em; }
-.side { position: sticky; top: 80px; }
+/* With two columns, the My list panel sits beside the description and episodes and stays put (it used to follow the
+   page down), and Related / More like this run underneath across the full width. One column (narrow screens):
+   main, Related, More like this, then My list, as before. */
+.side { grid-column: 2; grid-row: 1; }
+.show-wide { grid-column: 1 / -1; min-width: 0; }
+.show-main { min-width: 0; }
 .seg { display: inline-flex; background: var(--surface); border-radius: 999px; padding: 3px; border: 1px solid var(--line); }
 .seg button { border: 0; background: none; padding: 6px 14px; min-height: 34px; border-radius: 999px; cursor: pointer;
   color: var(--muted); font-weight: 600; font-size: 0.87em; }
@@ -203,6 +208,9 @@ textarea { min-height: 80px; resize: vertical; }
   border-bottom: 1px solid var(--line); align-items: start;
 }
 .eprow:last-child { border-bottom: 0; }
+/* wide list: room between episodes (the narrow layout below sets its own spacing) */
+.eprow { padding-top: 18px; padding-bottom: 18px; }
+.eprow + .eprow { margin-top: 10px; }
 .eprow:hover { background: var(--bg-2); }
 .eprow.next { background: var(--bg-2); box-shadow: inset 3px 0 0 var(--accent); }
 .ep-thumb { grid-area: thumb; position: relative; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: var(--surface); }
@@ -237,6 +245,7 @@ textarea { min-height: 80px; resize: vertical; }
     grid-template-areas: "thumb head" "desc desc" "actions actions"; grid-template-rows: auto;
     padding: 14px 0; border-radius: 0; row-gap: 10px; column-gap: 12px;
   }
+  .eprow + .eprow { margin-top: 0; }
   .eprow:hover { background: none; }
   .eprow.next { background: none; box-shadow: none; }
   .ep-head { align-self: center; }
@@ -254,7 +263,7 @@ textarea { min-height: 80px; resize: vertical; }
 /* side panel moves under the header when there isn't room for two columns (iPad portrait, small laptops) */
 @media (max-width: 980px) {
   .show-cols { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; order: 1; }
+  .side { position: static; order: 1; grid-column: auto; grid-row: auto; }
 }
 
 /* ---------- watch page ---------- */

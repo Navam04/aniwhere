@@ -935,7 +935,7 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
     <div id="seasons"></div>
     <div id="collection-link"></div>
     <div class="show-cols">
-      <div>
+      <div class="show-main">
         ${desc ? `<p class="desc clamp" id="desc">${esc(desc)}</p><button class="linkish" id="more">Show more</button>` : ''}
         <section class="section">
           <div class="section-head"><h2>${m.format === 'MOVIE' ? 'Movie' : 'Episodes'}</h2>
@@ -945,10 +945,10 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
           <div id="eps">${sk.eps()}</div>
           <div id="source-info" class="faint" style="margin-top:14px;font-size:13.5px"></div>
         </section>
-        ${relations.length ? section('Related', relations.map(e => posterCard(e.node, {
-          sub: RELATION[e.relationType], badge: '' })).join('')) : ''}
-        <div id="similar">${sk.row(6)}</div>
       </div>
+      ${relations.length ? `<div class="show-wide">${section('Related', relations.map(e => posterCard(e.node, {
+        sub: RELATION[e.relationType], badge: '' })).join(''))}</div>` : ''}
+      <div id="similar" class="show-wide">${sk.row(6)}</div>
       <aside class="side panel" id="list-panel"></aside>
     </div>`;
 
