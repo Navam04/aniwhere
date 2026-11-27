@@ -160,6 +160,11 @@ def init():
         set_setting("history_seeded", 1)
     # ani-cli moved from HiAnime to Miruro: old HiAnime show ids (slugs like "one-piece-1") no longer work.
     # Forget them so each show is matched again on first use; the show's sub/dub choice is kept.
+    # push devices: a name to show, when they were added, and how the last notification went
+    have = _columns("push_sub")
+    for col, kind in (("label", "TEXT"), ("added", "REAL"), ("last_sent", "REAL"), ("last_error", "TEXT")):
+        if col not in have:
+            c.execute(f"ALTER TABLE push_sub ADD COLUMN {col} {kind}")
     run("UPDATE mapping SET source_id=NULL, source_title=NULL, verified=0 "
         "WHERE source_id IS NOT NULL AND source_id NOT GLOB '[0-9]*:*:*'")
 

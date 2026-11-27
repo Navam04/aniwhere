@@ -3,6 +3,14 @@
 All notable changes to Aniwhere. Versions follow [Semantic Versioning](https://semver.org): a major version can need
 manual steps when updating (they're listed under its heading), minor versions add features, patches fix things.
 
+## [1.3.0] - 2026-11-27
+
+- New: Settings → New episode notifications says whether this device gets notifications, with a Turn on / Turn off
+  button to match, and a "Send a test here".
+- New: a list of all your devices that get notifications (named like "iPhone" or "Mac · Safari", with when each
+  was added and how its last notification went). From any device you can send a test to one or remove it.
+  Devices added before this version get their name the next time you open Settings on them.
+
 ## [1.2.0] - 2026-11-27
 
 - New: app updates without re-adding it to the home screen. When the server has a newer version, the app shows

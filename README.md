@@ -35,7 +35,8 @@ behaves like an app. Everyone you let in gets their own lists, progress and sett
 - **Episodes kept on the server:** the next episodes of everyone's Watching shows download nightly and play from disk
 - **Collections:** franchises (with story-order guides) and studios
 - **Profiles:** each Tailscale login has its own lists, progress, history and settings; the owner adds people in Settings
-- **Push notifications** for new episodes (on iPhone, from the home-screen app)
+- **Push notifications** for new episodes (on iPhone, from the home-screen app), with every device you get them
+  on listed in Settings, where you can test or turn off any of them
 - Filler tags and "Skip filler", stats and a yearly recap, TV mode for remotes (`?tv=1`)
 - **Looks after itself:** ani-cli updates daily, nightly database backups (last 7 kept), a Server health panel,
   and health alerts: a push notification to the owner when streaming, disk space or backups break, and when they're fixed

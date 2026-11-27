@@ -923,3 +923,10 @@ body.tv .tabbar { display: none; }
 .as-table td, .as-table th { padding: 4px 16px 4px 0; text-align: left; border-bottom: 1px solid var(--line); }
 .recap .section-head select { width: auto; }
 .people .hdot { display: inline-block; margin-right: 8px; vertical-align: middle; }
+.push-state { display: flex; align-items: flex-start; gap: 10px; }
+.push-state .hdot { margin-top: 6px; }
+.push-state small { display: block; color: var(--muted); font-size: .85em; margin-top: 2px; }
+.row-actions { display: flex; gap: 14px; flex: none; }
+#pushdevs em { display: block; margin: 3px 0 0 17px; }
+#pushdevs .badge.inline { margin-left: 6px; vertical-align: 2px; }
+#pushme .actions { margin-top: 16px; }

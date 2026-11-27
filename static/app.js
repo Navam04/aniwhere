@@ -1892,12 +1892,14 @@ async function viewSettings(stale) {
   } else {
     const perm = Notification.permission;
     pushHtml = `<p class="muted">Get a notification when a new episode of a show you're watching is out (in your chosen sub/dub).
-        ${s.push.devices ? `${s.push.devices} device${s.push.devices > 1 ? 's' : ''} subscribed.` : ''}</p>
+        Each device you want them on has to be turned on from that device; you can turn any of them off from here.</p>
       ${perm === 'denied' ? `<div class="note-box">Notifications are blocked on this device. ${isIOS
         ? 'Open the iPhone <strong>Settings</strong> app → <strong>Notifications</strong> → <strong>Aniwhere</strong> and turn on <em>Allow Notifications</em>, then come back here.'
         : 'Click the icon to the left of the address bar, set <strong>Notifications</strong> to <em>Allow</em>, then reload this page.'}</div>` : ''}
-      <div class="actions">${perm === 'denied' ? '' : `<button class="btn accent" id="pushon">${perm === 'granted' && s.push.devices ? 'Turn on again for this device' : 'Turn on for this device'}</button>`}
-        <button class="btn ghost" id="pushtest" ${s.push.devices ? '' : 'disabled'}>Send a test</button></div>`;
+      <div id="pushme" class="push-me">${spinner()}</div>
+      <h4 class="sub-h">Your devices</h4>
+      <ul class="people" id="pushdevs"><li class="faint">Loading…</li></ul>
+      <div class="actions"><button class="btn ghost small" id="pushtest" hidden>Send a test to all</button></div>`;
   }
 
   const pl = s.player || { autoplay: true, autoskip: false };
@@ -2095,19 +2097,91 @@ async function viewSettings(stale) {
       location.href = `https://anilist.co/api/v2/oauth/authorize?client_id=${encodeURIComponent(cid)}&response_type=token`;
     });
   }
-  const on = $('#pushon');
-  if (on) on.onclick = e => busy(e.target, async () => {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { toast('Notifications were not allowed'); return; }
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(s.push.public_key) });
-    await api('/api/push/subscribe', { method: 'POST', body: sub.toJSON() });
-    toast('Notifications are on for this device');
-    viewSettings(stale);
-  });
+  // Notifications: whether this device gets them, and every device of yours that does
+  const pushMe = $('#pushme');
+  const deviceLabel = () => {
+    const ua = navigator.userAgent;
+    const touchMac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+    const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) || touchMac ? 'iPad' : /Android/.test(ua) ? 'Android'
+      : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux' : 'Device';
+    if (os === 'iPhone' || os === 'iPad') return os;
+    const br = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
+    return `${os} · ${br}${isStandalone ? ' app' : ''}`;
+  };
+  const deviceId = async endpoint => {  // same hash as the server's push.device_id
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+    return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  };
+  const mySubscription = async () => {
+    try { return await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription(); } catch { return null; }
+  };
+  async function paintPush(list) {
+    if (!pushMe) return;
+    try { list = list || (await api('/api/push/devices')).devices; } catch (e) { pushMe.innerHTML = errorBox(e); return; }
+    const sub = await mySubscription();
+    const myId = sub && window.crypto?.subtle ? await deviceId(sub.endpoint) : null;
+    const perm = Notification.permission;
+    const on = perm === 'granted' && !!myId && list.some(d => d.id === myId);
+    const mine = on && list.find(d => d.id === myId);
+    if (mine && mine.label !== deviceLabel()) {  // added before devices had names, or the browser changed: rename quietly
+      try { await api('/api/push/subscribe', { method: 'POST', body: { ...sub.toJSON(), label: deviceLabel() } }); mine.label = deviceLabel(); } catch { /* keep the old name */ }
+    }
+    pushMe.innerHTML = `<div class="push-state">${dot(on ? true : perm === 'denied' ? false : null)}<div><strong>This device: ${on ? 'on' : 'off'}</strong>
+        <small>${on ? 'New-episode notifications arrive here.' : perm === 'denied' ? 'Blocked in this device\'s settings (see above).'
+          : sub && myId ? 'It was turned off, possibly from another device.' : 'This device doesn\'t get notifications.'}</small></div></div>
+      <div class="actions">${on ? `<button class="btn ghost" id="pushoff">Turn off for this device</button>
+          <button class="btn ghost" id="pushme-test">Send a test here</button>`
+        : perm === 'denied' ? '' : '<button class="btn accent" id="pushon">Turn on for this device</button>'}</div>`;
+    const when = d => [d.added ? `added ${new Date(d.added * 1000).toLocaleDateString()}` : '',
+      d.last_error ? `last notification failed (${d.last_error})` : d.last_sent ? `last notification ${ago(d.last_sent)}` : 'no notifications yet'].filter(Boolean).join(' · ');
+    $('#pushdevs').innerHTML = list.length ? list.map(d => `<li><span>${dot(d.last_error ? false : true)}${esc(d.label)}${d.id === myId ? ' <span class="badge inline">This device</span>' : ''}
+        <em>${esc(when(d))}</em></span>
+        <span class="row-actions"><button class="linkish" data-ptest="${d.id}">Test</button>
+          <button class="linkish" data-prm="${d.id}" data-label="${esc(d.label)}">Remove</button></span></li>`).join('')
+      : '<li class="faint">No devices yet. Turn notifications on above, on each device you want them on.</li>';
+    $('#pushtest').hidden = list.length < 2;
+    const off = async () => {
+      await api(`/api/push/devices/${myId}`, { method: 'DELETE' });
+      try { await sub?.unsubscribe(); } catch { /* the server no longer sends here either way */ }
+    };
+    const onBtn = $('#pushon');
+    if (onBtn) onBtn.onclick = e => busy(e.target, async () => {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') { toast('Notifications were not allowed'); paintPush(); return; }
+      const reg = await navigator.serviceWorker.ready;
+      let s2 = await reg.pushManager.getSubscription();
+      if (!s2) s2 = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(s.push.public_key) });
+      await api('/api/push/subscribe', { method: 'POST', body: { ...s2.toJSON(), label: deviceLabel() } });
+      toast('Notifications are on for this device');
+      paintPush();
+    });
+    const offBtn = $('#pushoff');
+    if (offBtn) offBtn.onclick = e => busy(e.target, async () => { await off(); toast('Notifications are off for this device'); paintPush(); });
+    const meTest = $('#pushme-test');
+    if (meTest) meTest.onclick = e => busy(e.target, async () => {
+      const r = await api(`/api/push/devices/${myId}/test`, { method: 'POST' });
+      toast(r.sent ? 'Sent. It should appear in a moment.' : 'Couldn\'t reach this device');
+      paintPush(r.devices);
+    });
+    $$('[data-ptest]').forEach(btn => btn.onclick = () => busy(btn, async () => {
+      const r = await api(`/api/push/devices/${btn.dataset.ptest}/test`, { method: 'POST' });
+      toast(r.sent ? 'Sent' : 'Couldn\'t reach that device');
+      paintPush(r.devices);
+    }));
+    $$('[data-prm]').forEach(btn => btn.onclick = () => busy(btn, async () => {
+      if (!confirm(`Stop notifications on ${btn.dataset.label}?`)) return;
+      if (btn.dataset.prm === myId) { await off(); paintPush(); }
+      else paintPush((await api(`/api/push/devices/${btn.dataset.prm}`, { method: 'DELETE' })).devices);
+      toast('Removed');
+    }));
+  }
+  paintPush();
   const test = $('#pushtest');
-  if (test) test.onclick = e => busy(e.target, async () => { const r = await api('/api/push/test', { method: 'POST' }); toast(`Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}`); });
+  if (test) test.onclick = e => busy(e.target, async () => {
+    const r = await api('/api/push/test', { method: 'POST' });
+    toast(`Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}`);
+    paintPush();
+  });
   $('#refresh-app').onclick = e => { e.target.disabled = true; e.target.textContent = 'Refreshing…'; refreshApp(); };
   $('#upd').onclick = e => busy(e.target, async () => {
     e.target.textContent = 'Updating…';

@@ -1134,8 +1134,30 @@ async def anilist_disconnect():
 async def push_subscribe(sub: dict):
     if "endpoint" not in sub:
         raise HTTPException(400, "Invalid subscription")
-    push.subscribe(sub)
+    label = sub.pop("label", None)
+    push.subscribe(sub, label if isinstance(label, str) else None)
     return {"devices": push.count()}
+
+
+@app.get("/api/push/devices")
+async def push_devices():
+    """Your devices that get notifications. Each page recognises itself by hashing its own subscription."""
+    return {"devices": push.devices()}
+
+
+@app.delete("/api/push/devices/{dev_id}")
+async def push_remove_device(dev_id: str):
+    if not push.remove(dev_id):
+        raise HTTPException(404, "No such device")
+    return {"devices": push.devices()}
+
+
+@app.post("/api/push/devices/{dev_id}/test")
+async def push_test_device(dev_id: str):
+    sent = await push.send_to(dev_id, "Test notification", "Notifications work on this device.", "/#/settings")
+    if sent is None:
+        raise HTTPException(404, "No such device")
+    return {"sent": sent, "devices": push.devices()}
 
 
 @app.post("/api/push/test")
