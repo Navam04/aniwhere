@@ -37,7 +37,8 @@ behaves like an app. Everyone you let in gets their own lists, progress and sett
 - **Profiles:** each Tailscale login has its own lists, progress, history and settings; the owner adds people in Settings
 - **Push notifications** for new episodes (on iPhone, from the home-screen app)
 - Filler tags and "Skip filler", stats and a yearly recap, TV mode for remotes (`?tv=1`)
-- **Looks after itself:** ani-cli updates daily, nightly database backups (last 7 kept), a Server health panel
+- **Looks after itself:** ani-cli updates daily, nightly database backups (last 7 kept), a Server health panel,
+  and health alerts: a push notification to the owner when streaming, disk space or backups break, and when they're fixed
 
 ## Install
 
@@ -65,7 +66,11 @@ your devices ──HTTPS over Tailscale──▶ Aniwhere (FastAPI, port 8000)
 
 - `bridge.sh` loads ani-cli's own scraping functions (without its menus or player), so updating ani-cli updates
   how streams are found. The app pulls the latest ani-cli daily, and Settings has an "Update ani-cli" button.
-- AniList shows are matched to the stream source by title search, then verified by MAL ID.
+  When ani-cli switches to a different site (its provider), its function names change and `bridge.sh` must be
+  updated to match; this happened on 2026-11-26 (HiAnime to Miruro, fixed in 1.1.0). Health alerts report it within
+  the hour. See [docs/stream-source.md](docs/stream-source.md) for what changed and how to handle the next one.
+- AniList shows are matched to the stream source by title search. Miruro's ids include the AniList id, so the
+  match is exact; otherwise it's verified by MAL ID.
 - All video goes through your server, so your devices only ever talk to your server.
 - Access is checked against Tailscale identity: only the logins you list (and people the owner adds) get in.
 

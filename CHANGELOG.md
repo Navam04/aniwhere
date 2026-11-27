@@ -13,6 +13,8 @@ manual steps when updating (they're listed under its heading), minor versions ad
 - New: health alerts. The server checks streaming (a real search + episode list + stream lookup), disk space and
   backups every few minutes and sends the owner a push notification when one breaks and when it's fixed.
   Settings → Server health has an on/off switch, "Check now" and "Send test alert".
+- What happened, what changed and how to handle ani-cli's next provider change:
+  [docs/stream-source.md](docs/stream-source.md)
 
 ## [1.0.2] - 2026-11-10
 
