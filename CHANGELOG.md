@@ -3,6 +3,22 @@
 All notable changes to Aniwhere. Versions follow [Semantic Versioning](https://semver.org): a major version can need
 manual steps when updating (they're listed under its heading), minor versions add features, patches fix things.
 
+## [1.4.0] - 2026-11-27
+
+- New: downloads. Every episode on a show's page has a Download button, and the Episodes header has "Download
+  season", which queues every episode not on the server yet. Episodes download one after another and are saved
+  on the server: they start instantly on any of your devices, play even when the stream site is down, and stay
+  until someone deletes them (the automatic cache never removes them). Everyone on the app can download.
+- New: when a download would leave less than 2 GB of the server's download space ("Space to use"), the app asks
+  first and suggests episodes to delete to make room: ones you've watched, then the ones nobody has played for
+  the longest. Nothing is downloaded if the server's disk itself would drop below 1 GB free.
+- New: Settings → Downloads shows the space used, your queue (cancel waiting episodes) and your downloads
+  (delete them). You can delete your own downloads and automatically kept episodes; only the owner can delete
+  someone else's.
+- Fixed: saving episodes on the server (downloads and the nightly cache) failed with "429 Too Many Requests"
+  since the switch to Miruro. Segments are now fetched two at a time, and when a host asks to slow down, all
+  fetches pause for as long as it asks.
+
 ## [1.3.1] - 2026-11-27
 
 - Changed (computers, tablets and landscape screens): on a show's page the My list panel (status, episodes

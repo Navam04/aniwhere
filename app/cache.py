@@ -4,7 +4,8 @@ Each cached episode is a folder  CACHE_DIR/<anilist_id>/<episode>-<mode>/  with 
 (master.m3u8 -> video.m3u8 [+ audio.m3u8], segments, keys, sub.vtt) and meta.json. It's written to a
 temporary folder first and renamed when complete, so a failed download never leaves half an episode.
 The total size is kept under a limit (Settings), dropping episodes nobody needs any more, then the
-least recently used."""
+least recently used. Episodes someone downloaded on purpose (meta "kept_by", see downloads.py) are never
+dropped automatically; they count towards the limit and stay until someone deletes them."""
 import asyncio
 import json
 import logging
@@ -85,6 +86,10 @@ def usage():
     return sum(m.get("size", 0) for m in entries())
 
 
+def write_meta(meta):
+    (_folder(meta["anilist_id"], meta["episode"], meta["mode"]) / "meta.json").write_text(json.dumps(meta))
+
+
 def remove(anilist_id, episode, mode):
     shutil.rmtree(_folder(anilist_id, episode, mode), ignore_errors=True)
     parent = CACHE_DIR / str(int(anilist_id))
@@ -110,6 +115,30 @@ def cached_episodes(anilist_id, mode):
 
 
 # downloading ---------------------------------------------------------------------------------
+# The stream hosts limit how fast one client may fetch (HTTP 429). Fetch a couple of segments at a time, and when
+# a host says "too many requests", every fetch pauses (for as long as its Retry-After asks, else a growing wait).
+PARALLEL = 2
+ATTEMPTS = 8
+_paused_until = 0.0
+
+
+async def _cool_down():
+    wait = _paused_until - time.time()
+    if wait > 0:
+        await asyncio.sleep(wait)
+
+
+def _slow_down(response, attempt):
+    global _paused_until
+    try:
+        wait = float(response.headers.get("retry-after", ""))
+    except ValueError:
+        wait = 3 * 2 ** attempt
+    wait = min(max(wait, 1), 60)
+    _paused_until = max(_paused_until, time.time() + wait)
+    log.info("stream host answered %s; pausing downloads for %.0fs", response.status_code, wait)
+
+
 async def _get(url, headers, binary=False):
     r = await hls.client.get(url, headers=headers)
     r.raise_for_status()
@@ -135,20 +164,25 @@ async def _download_playlist(url, headers, folder, prefix, quality):
         return await _download_playlist(pick[1], headers, folder, prefix, quality)
 
     out, size, n = [], 0, 0
-    sem = asyncio.Semaphore(4)
+    sem = asyncio.Semaphore(PARALLEL)
     jobs = []
 
     async def fetch(seg_url, path, strip):
         nonlocal size
         async with sem:
-            for attempt in range(3):
+            for attempt in range(ATTEMPTS):
+                await _cool_down()
                 try:
                     data = await _get(seg_url, headers, binary=True)
                     break
-                except httpx.HTTPError:
-                    if attempt == 2:
+                except httpx.HTTPStatusError as ex:
+                    if attempt == ATTEMPTS - 1 or ex.response.status_code not in (408, 425, 429, 500, 502, 503, 504):
                         raise
-                    await asyncio.sleep(2)
+                    _slow_down(ex.response, attempt)
+                except httpx.HTTPError:
+                    if attempt == ATTEMPTS - 1:
+                        raise
+                    await asyncio.sleep(2 * (attempt + 1))
             if strip and data[:1] != b"\x47":  # some hosts disguise .ts segments as images
                 for i in range(min(len(data) - 377, 8192)):
                     if data[i] == 0x47 and data[i + 188] == 0x47 and data[i + 376] == 0x47:
@@ -277,8 +311,8 @@ async def wanted():
 
 
 def _needed(m, keep):
-    """Wanted as is, or a sub copy standing in for a wanted dub that isn't saved yet."""
-    if (m["anilist_id"], m["episode"], m["mode"]) in keep:
+    """Downloaded by someone, wanted as is, or a sub copy standing in for a wanted dub that isn't saved yet."""
+    if m.get("kept_by") or (m["anilist_id"], m["episode"], m["mode"]) in keep:
         return True
     fb = m.get("fallback_for")
     return bool(fb) and (m["anilist_id"], m["episode"], fb) in keep and not _meta(m["anilist_id"], m["episode"], fb)
@@ -291,6 +325,8 @@ def prune(keep):
     total = sum(m.get("size", 0) for m in items)
     items.sort(key=lambda m: (_needed(m, keep), m.get("last_used") or m.get("created", 0)))
     for m in items:
+        if m.get("kept_by"):
+            continue  # downloaded on purpose: only a person removes it
         unneeded = not _needed(m, keep)
         if total <= limit and not (unneeded and time.time() - max(m.get("last_used") or 0, m.get("created", 0)) > 3 * 86400):
             continue

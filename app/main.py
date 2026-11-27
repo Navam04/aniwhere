@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import alerts, anilist, cache, collections, db, episodes, filler, health, hls, push, skip, source, watch_order
+from . import alerts, anilist, cache, downloads, collections, db, episodes, filler, health, hls, push, skip, source, watch_order
 from .anilist import AniListError
 from .source import SourceError
 
@@ -33,6 +33,7 @@ async def lifespan(_app):
     db.init()
     collections.init()
     filler.init()
+    downloads.resume()
     tasks = [asyncio.create_task(background()), asyncio.create_task(collections.keep_fresh()),
              asyncio.create_task(alerts.keep_watch())]
     yield
@@ -703,6 +704,58 @@ async def cached_file(anilist_id: int, folder: str, name: str):
         raise HTTPException(404, "Not cached")
     return FileResponse(path, media_type=CACHE_TYPES.get(path.suffix, "application/octet-stream"),
                         headers={"Cache-Control": "private, max-age=3600"})
+
+
+# downloads (everyone): save episodes on the server on purpose -----------------------------------------
+class DownloadIn(BaseModel):
+    anilist_id: int
+    episodes: list[str]
+    mode: str
+
+
+def _dl_mode(mode):
+    if mode not in ("sub", "dub"):
+        raise HTTPException(400, "mode must be sub or dub")
+    return mode
+
+
+@app.get("/api/downloads")
+async def downloads_mine():
+    return downloads.mine()
+
+
+@app.get("/api/downloads/show/{anilist_id}")
+async def downloads_show(anilist_id: int, mode: str):
+    return {"episodes": downloads.show_state(anilist_id, _dl_mode(mode)), "space": downloads.space()}
+
+
+@app.post("/api/downloads/check")
+async def downloads_check(body: DownloadIn):
+    return downloads.check(body.anilist_id, body.episodes[:500], _dl_mode(body.mode))
+
+
+@app.post("/api/downloads")
+async def downloads_add(body: DownloadIn):
+    c = downloads.check(body.anilist_id, body.episodes[:500], _dl_mode(body.mode))
+    if c["blocked"]:
+        raise HTTPException(507, "The server's disk is nearly full. Delete some episodes first.")
+    r = downloads.enqueue(body.anilist_id, body.episodes[:500], body.mode)
+    return {**r, "episodes": downloads.show_state(body.anilist_id, body.mode)}
+
+
+@app.delete("/api/downloads/queue/{anilist_id}/{episode}/{mode}")
+async def downloads_cancel(anilist_id: int, episode: str, mode: str):
+    if not downloads.cancel(anilist_id, episode, _dl_mode(mode)):
+        raise HTTPException(404, "Not in the queue (or it's downloading right now)")
+    return downloads.mine()
+
+
+@app.delete("/api/downloads/{anilist_id}/{episode}/{mode}")
+async def downloads_delete(anilist_id: int, episode: str, mode: str):
+    freed = downloads.delete(anilist_id, episode, _dl_mode(mode))
+    if freed is None:
+        raise HTTPException(403, "Someone else downloaded this one; only they or the owner can delete it")
+    return {"freed": freed, "space": downloads.space()}
 
 
 # episode cache settings and contents (owner) --------------------------------------------------

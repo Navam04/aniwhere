@@ -939,3 +939,18 @@ body.tv .tabbar { display: none; }
 #pushdevs em { display: block; margin: 3px 0 0 17px; }
 #pushdevs .badge.inline { margin-left: 6px; vertical-align: 2px; }
 #pushme .actions { margin-top: 16px; }
+
+/* downloads (episodes saved on the server) */
+.btn.dl-done { color: var(--good); }
+.btn.dl-done svg { fill: var(--good); }
+.btn.dl-busy svg { animation: dl-pulse 1.2s ease-in-out infinite; }
+.btn.dl-fail { color: var(--danger); }
+.btn.dl-fail svg { fill: var(--danger); }
+@keyframes dl-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .btn.dl-busy svg { animation: none; } }
+.dl-all { margin-left: auto; }
+.dl-all + .seg { margin-left: 0; }
+@container (max-width: 620px) {
+  .ep-actions .dl-btn { flex: 0 0 auto; padding-left: 12px; padding-right: 12px; }
+  .ep-actions .dl-btn span { display: none; }
+}

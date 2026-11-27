@@ -35,6 +35,7 @@ const I = {
   list: '<svg viewBox="0 0 24 24"><path d="M4 5h3v3H4zm5 0h11v3H9zM4 10.5h3v3H4zm5 0h11v3H9zM4 16h3v3H4zm5 0h11v3H9z"/></svg>',
   bell: '<svg viewBox="0 0 24 24"><path d="M12 2a6 6 0 0 1 6 6v4.6l2 3.4H4l2-3.4V8a6 6 0 0 1 6-6zm-2.5 16h5a2.5 2.5 0 0 1-5 0z"/></svg>',
   bellOff: '<svg viewBox="0 0 24 24"><path d="m3.3 2 18.7 18.7-1.4 1.4-3.1-3.1H4l2-3.4V8c0-.8.2-1.6.4-2.3L1.9 3.4zM12 2a6 6 0 0 1 6 6v4.6l.8 1.4L8.1 3.3A6 6 0 0 1 12 2zM9.5 20h5a2.5 2.5 0 0 1-5 0z"/></svg>',
+  download: '<svg viewBox="0 0 24 24"><path d="M11 4h2v8.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4 3.3 3.3zM5 18h14v2H5z"/></svg>',
 };
 
 // ---------- helpers ----------
@@ -940,6 +941,7 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
         <section class="section">
           <div class="section-head"><h2>${m.format === 'MOVIE' ? 'Movie' : 'Episodes'}</h2>
             <label class="filler-toggle" id="ftog" hidden><input type="checkbox" class="sw-input" id="skipfill"><i class="sw"></i>Skip filler</label>
+            <button class="btn small ghost dl-all" id="dlall" hidden>${I.download}<span>Download season</span></button>
             <div class="seg" id="mode" role="group" aria-label="Audio">
               <button data-mode="sub">Sub</button><button data-mode="dub">Dub</button></div></div>
           <div id="eps">${sk.eps()}</div>
@@ -1014,7 +1016,7 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
   const paintMode = () => $$('#mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   paintMode();
   $$('#mode button').forEach(b => b.onclick = async () => {
-    mode = b.dataset.mode; paintMode();
+    mode = b.dataset.mode; paintMode(); loadDownloads();
     try { await api(`/api/media/${id}/mode`, { method: 'PUT', body: { mode } }); toast(`This show will play ${mode === 'dub' ? 'dubbed' : 'subtitled'}`); }
     catch (e) { toast(e.message); }
   });
@@ -1034,7 +1036,7 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
   }
 
   // filler episodes (long shows only), and the per-person "Skip filler" switch
-  let fillerMap = {}, skipFiller = false, cachedEps = new Set();
+  let fillerMap = {}, skipFiller = false, cachedEps = new Set(), dl = {}, dlTimer = null;
   async function loadFiller() {
     try {
       const r = await api(`/api/media/${id}/filler`);
@@ -1136,7 +1138,8 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
       const pct = w && !w.completed && w.duration ? Math.min(100, w.position / w.duration * 100) : 0;
       box.innerHTML = `<div class="movie-row">${m.duration ? `<span class="chip">${m.duration >= 60 ? `${Math.floor(m.duration / 60)}h ` : ''}${m.duration % 60}m</span>` : ''}
         ${pct ? `<span class="faint">${esc(clock(w.duration - w.position))} left</span>` : ''}
-        <button class="btn small ${done ? 'watched' : 'ghost'} tick" data-ep="${esc(ep)}" aria-pressed="${done}">${I.check}${done ? 'Watched' : 'Mark watched'}</button></div>`;
+        <button class="btn small ${done ? 'watched' : 'ghost'} tick" data-ep="${esc(ep)}" aria-pressed="${done}">${I.check}${done ? 'Watched' : 'Mark watched'}</button>
+        ${dlButton(ep)}</div>`;
     } else box.innerHTML = `${picker}<div class="eplist">${list.map(ep => {
       const w = watch[ep], done = isWatched(ep), info = details[ep] || {};
       const pct = w && !w.completed && w.duration ? Math.min(100, w.position / w.duration * 100) : 0;
@@ -1155,12 +1158,13 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
         </a>
         <div class="ep-head">
           <div class="ep-title"><span class="ep-num">${esc(ep)}</span>${esc(title)}</div>
-          <div class="ep-meta">${isNext ? '<span class="ep-tag">Up next</span>' : ''}${fill ? `<span class="fill-tag ${fill}">${fill === 'filler' ? 'Filler' : 'Part filler'}</span>` : ''}${cachedEps.has(ep) ? '<span class="saved-tag" title="Kept on the server: starts instantly">Saved</span>' : ''}${status ? `<span>${esc(status)}</span>` : ''}</div>
+          <div class="ep-meta">${isNext ? '<span class="ep-tag">Up next</span>' : ''}${fill ? `<span class="fill-tag ${fill}">${fill === 'filler' ? 'Filler' : 'Part filler'}</span>` : ''}${cachedEps.has(ep) && !dl[ep] ? '<span class="saved-tag" title="Kept on the server: starts instantly">Saved</span>' : ''}${status ? `<span>${esc(status)}</span>` : ''}</div>
         </div>
         ${info.description ? `<p class="ep-desc">${esc(info.description)}</p>` : ''}
         <div class="ep-actions">
           <a class="btn small primary" href="${href}">${I.play}${pct ? 'Resume' : done ? 'Rewatch' : 'Play'}</a>
           <button class="btn small ${done ? 'watched' : 'ghost'} tick" data-ep="${esc(ep)}" aria-pressed="${done}">${I.check}${done ? 'Watched' : 'Mark watched'}</button>
+          ${dlButton(ep)}
         </div>
       </article>`;
     }).join('')}</div>`;
@@ -1178,7 +1182,110 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
         paintEpisodes(); paintActions(); paintList();
       } catch (e) { toast(e.message); b.disabled = false; }
     });
+    $$('.dl-btn', box).forEach(b => b.onclick = () => onDownloadClick(b.dataset.dl, b));
+    paintDownloadAll();
     if (!movieLike()) loadDetails(list);
+  }
+
+  // downloads: save episodes on the server (they then start instantly and play even when the site is down)
+  const gb = b => `${(Math.max(0, b) / 1e9).toFixed(1)} GB`;
+  function dlButton(ep) {
+    const d = dl[ep] || {};
+    const [cls, icon, label, title] = {
+      done: ['dl-done', I.check, 'Downloaded', d.mine ? 'You downloaded this; it stays on the server until deleted' : 'On the server: starts instantly'],
+      queued: ['dl-wait', I.clock, 'Queued', 'Waiting its turn. Tap to take it out of the queue'],
+      downloading: ['dl-busy', I.download, 'Downloading…', 'Being saved on the server now'],
+      failed: ['dl-fail', I.download, 'Retry download', d.error ? `Last try failed: ${d.error}` : 'Last try failed'],
+    }[d.state] || ['', I.download, 'Download', 'Save on the server'];
+    return `<button class="btn small ghost dl-btn ${cls}" data-dl="${esc(ep)}" title="${esc(title)}" aria-label="${esc(label)}, episode ${esc(ep)}">${icon}<span>${label}</span></button>`;
+  }
+  function paintDownloadAll() {
+    const b = $('#dlall');
+    if (!b) return;
+    const eps = episodes || [];
+    const todo = eps.filter(ep => !dl[ep] || dl[ep].state === 'failed');
+    b.hidden = !eps.length || movieLike();
+    const busy = eps.some(ep => dl[ep] && (dl[ep].state === 'queued' || dl[ep].state === 'downloading'));
+    $('span', b).textContent = !todo.length ? (busy ? 'Season queued' : 'Season downloaded') : 'Download season';
+    b.disabled = !todo.length;
+    b.onclick = () => startDownload(todo, b);
+  }
+  async function loadDownloads() {
+    clearTimeout(dlTimer);
+    try {
+      const r = await api(`/api/downloads/show/${id}?mode=${mode}`);
+      if (stale()) return;
+      dl = r.episodes || {};
+    } catch { return; }
+    if (episodes) paintEpisodes();
+    // keep the buttons current while something of this show is waiting or downloading
+    if (Object.values(dl).some(d => d.state === 'queued' || d.state === 'downloading')) {
+      dlTimer = setTimeout(() => { if (!stale()) loadDownloads(); }, 5000);
+    }
+  }
+  async function enqueue(eps) {
+    const r = await api('/api/downloads', { method: 'POST', body: { anilist_id: id, episodes: eps, mode } });
+    toast(r.queued ? `${r.queued === 1 ? 'Episode' : `${r.queued} episodes`} queued for download${r.already_saved ? ` · ${r.already_saved} already on the server` : ''}`
+      : 'Already on the server');
+    loadDownloads();
+  }
+  async function startDownload(eps, btn) {
+    if (!eps.length) return;
+    if (btn) btn.disabled = true;
+    try {
+      const c = await api('/api/downloads/check', { method: 'POST', body: { anilist_id: id, episodes: eps, mode } });
+      if (!c.episodes.length) { toast('Already on the server or in the queue'); return; }
+      if (c.blocked) { toast('The server\'s disk is nearly full. Delete some episodes first (Settings → Downloads).'); return; }
+      if (c.warn) lowSpace(c); else await enqueue(c.episodes);
+    } catch (e) { toast(e.message); } finally { if (btn) btn.disabled = false; }
+  }
+  // Less than 2 GB of the server's download space would be left: ask first, and offer older episodes to delete
+  function lowSpace(c) {
+    const sp = c.space, n = c.episodes.length;
+    const pick = new Set();
+    let enough = 0;
+    for (const s of c.suggestions) {  // pre-tick just enough to keep 2 GB free
+      if (c.left_after + enough >= sp.warn_below) break;
+      pick.add(s); enough += s.size;
+    }
+    const sub = `${n === 1 ? 'This episode needs' : `${n} episodes need`} about ${gb(c.need)}. That leaves ${gb(c.left_after)} of the ${gb(sp.limit)} set aside for downloads${c.left_after < 0 ? ' (over the limit)' : ''}.`;
+    const items = () => [
+      ...(c.suggestions.length ? ['Delete to make room'] : []),
+      ...c.suggestions.map(s => ({
+        label: `${s.title} · ${/^\d/.test(s.episode) ? 'Ep ' : ''}${s.episode}${s.mode === 'dub' ? ' (dub)' : ''}`,
+        sub: `${gb(s.size)} · ${s.watched ? 'you watched it' : s.last_used ? `last played ${ago(s.last_used)}` : 'never played'}${s.kept_by_me ? ' · your download' : ''}`,
+        checked: pick.has(s), keep: true,
+        onClick: r => { pick.has(s) ? pick.delete(s) : pick.add(s); r(items()); },
+      })),
+      ...(pick.size ? [{ label: `Delete ${pick.size} and download`, sub: `Frees ${gb([...pick].reduce((a, s) => a + s.size, 0))}`, icon: I.trash, danger: true,
+        onClick: async () => {
+          for (const s of pick) await api(`/api/downloads/${s.anilist_id}/${encodeURIComponent(s.episode)}/${s.mode}`, { method: 'DELETE' });
+          await enqueue(c.episodes);
+        } }] : []),
+      { label: 'Download anyway', icon: I.download, onClick: () => enqueue(c.episodes) },
+      { label: 'Cancel', icon: I.x },
+    ];
+    openSheet({ title: 'Running low on download space', sub, items: items() });
+  }
+  async function onDownloadClick(ep, btn) {
+    const d = dl[ep];
+    if (!d || d.state === 'failed') return startDownload([ep], btn);
+    if (d.state === 'queued') {
+      try { await api(`/api/downloads/queue/${id}/${encodeURIComponent(ep)}/${mode}`, { method: 'DELETE' }); toast('Taken out of the queue'); }
+      catch (e) { toast(e.message); }
+      return loadDownloads();
+    }
+    if (d.state === 'downloading') return toast('Downloading now. It plays from the server once it\'s done.');
+    openSheet({
+      title: `Episode ${ep}`, sub: `On the server${d.size ? ` · ${gb(d.size)}` : ''}${d.mine ? ' · you downloaded it' : d.kept ? ' · someone downloaded it' : ' · kept automatically'}`,
+      items: [
+        { label: 'Play', icon: I.play, onClick: () => { location.hash = `#/watch/${id}/${encodeURIComponent(ep)}`; } },
+        ...(d.deletable ? [{ label: 'Delete from the server', icon: I.trash, danger: true, onClick: async () => {
+          await api(`/api/downloads/${id}/${encodeURIComponent(ep)}/${mode}`, { method: 'DELETE' });
+          toast('Deleted from the server'); cachedEps.delete(ep); loadDownloads();
+        } }] : []),
+      ],
+    });
   }
 
   const choose = () => openPicker(m, async picked => {
@@ -1206,6 +1313,7 @@ async function viewShow(stale, id, { pick = false, keepScroll = false } = {}) {
       cachedEps = new Set(r.cached || []);
       paintSource(r.mapping);
       paintEpisodes();
+      loadDownloads();
       if (episodes.length >= 40) loadFiller();
     } catch (e) {
       if (stale()) return;
@@ -1937,6 +2045,7 @@ async function viewSettings(stale) {
         <p class="muted">Streams are found with ani-cli ${esc(s.ani_cli_version || '(not found)')}. It updates itself daily; if episodes stop loading, update it now.</p>
         <div class="actions"><button class="btn" id="upd">Update ani-cli</button></div></section>
       <section class="panel"><h3>Server health</h3><div id="health" class="stack">${spinner()}</div></section>
+      <section class="panel"><h3>Downloads</h3><div id="dlbox" class="stack">${spinner()}</div></section>
       ${s.profile?.is_owner ? `<section class="panel"><h3>Episodes kept on the server</h3><div id="cachebox" class="stack">${spinner()}</div></section>` : ''}
       <section class="panel"><h3>About</h3>
         <p class="muted">Aniwhere ${esc(s.version || '')}: watch anime anywhere, from your own server.</p>
@@ -2030,6 +2139,40 @@ async function viewSettings(stale) {
     }
   }
   paintHealth();
+
+  // Downloads (everyone): your queue and the episodes you saved on the server
+  let dlPoll;
+  async function paintMyDownloads() {
+    clearTimeout(dlPoll);
+    const box = $('#dlbox');
+    if (!box) return;
+    let d;
+    try { d = await api('/api/downloads'); } catch (e) { box.innerHTML = errorBox(e); return; }
+    if (stale()) return;
+    const sp = d.space, epName = x => `${esc(x.title)} · ${/^\d/.test(x.episode) ? 'Episode ' : ''}${esc(x.episode)}${x.mode === 'dub' ? ' (dub)' : ''}`;
+    const used = sp.used + sp.queued;
+    box.innerHTML = `<p class="muted" style="margin:0">Download episodes from a show's page (one at a time or a whole season). They're saved on the
+        server, start instantly on any of your devices and play even when the stream site is down. They stay until you delete them.</p>
+      <div class="coll-progress"><div class="pbar"><i style="width:${Math.min(100, used / sp.limit * 100)}%"></i></div>
+        <span>${bytes(sp.used)} used${sp.queued ? ` · about ${bytes(sp.queued)} queued` : ''} of ${bytes(sp.limit)} set aside for downloads (shared with everyone on this server)</span></div>
+      ${d.queue.length ? `<h4 class="sub-h">Queue</h4><ul class="people">${d.queue.map(x => `<li><span>${epName(x)}
+          <em>${x.state === 'downloading' ? 'downloading now' : x.state === 'failed' ? `failed: ${esc(x.error || '')}` : 'waiting'}</em></span>
+          ${x.state === 'downloading' ? '' : `<button class="linkish" data-dlq="${x.anilist_id}|${esc(x.episode)}|${x.mode}">${x.state === 'failed' ? 'Remove' : 'Cancel'}</button>`}</li>`).join('')}</ul>` : ''}
+      <h4 class="sub-h">Your downloads</h4>
+      ${d.saved.length ? `<ul class="people">${d.saved.map(x => `<li><span>${epName(x)}<em>${x.quality ? `${x.quality}p · ` : ''}${bytes(x.size)}</em></span>
+          <button class="linkish" data-dld="${x.anilist_id}|${esc(x.episode)}|${x.mode}">Delete</button></li>`).join('')}</ul>`
+        : '<p class="faint" style="margin:0">Nothing downloaded yet.</p>'}`;
+    $$('[data-dlq]', box).forEach(b => b.onclick = () => busy(b, async () => {
+      const [aid, ep, mode] = b.dataset.dlq.split('|');
+      await api(`/api/downloads/queue/${aid}/${encodeURIComponent(ep)}/${mode}`, { method: 'DELETE' }); paintMyDownloads();
+    }));
+    $$('[data-dld]', box).forEach(b => b.onclick = () => busy(b, async () => {
+      const [aid, ep, mode] = b.dataset.dld.split('|');
+      await api(`/api/downloads/${aid}/${encodeURIComponent(ep)}/${mode}`, { method: 'DELETE' }); toast('Deleted from the server'); paintMyDownloads();
+    }));
+    if (d.queue.some(x => x.state !== 'failed')) dlPoll = setTimeout(() => { if (!stale()) paintMyDownloads(); }, 5000);
+  }
+  paintMyDownloads();
 
   // Episode cache (owner): the next episodes of everyone's Watching shows are downloaded nightly
   async function paintCache() {
