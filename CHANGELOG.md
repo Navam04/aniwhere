@@ -3,6 +3,14 @@
 All notable changes to Aniwhere. Versions follow [Semantic Versioning](https://semver.org): a major version can need
 manual steps when updating (they're listed under its heading), minor versions add features, patches fix things.
 
+## [1.2.0] - 2026-11-27
+
+- New: app updates without re-adding it to the home screen. When the server has a newer version, the app shows
+  "A new version is ready" with a Refresh button. It checks when you come back to the app and every
+  15 minutes, and never interrupts a video: the banner waits until the player is closed.
+- New: Settings → About shows which version the app is running and has a "Refresh app" button that reloads it with
+  the newest files. Notifications stay on.
+
 ## [1.1.0] - 2026-11-27
 
 - Fixed: streaming stopped working after ani-cli switched its provider from HiAnime to Miruro. The bridge now

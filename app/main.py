@@ -853,9 +853,27 @@ async def delete_history(entry_id: int):
     return {"ok": True}
 
 
+_build_cache = (None, None)
+
+
+def frontend_build():
+    """The frontend build the server is handing out: the ?v= stamp on app.js in index.html, which the installer
+    changes on every deploy. Open pages compare it with the build they loaded to offer a refresh."""
+    global _build_cache
+    path = STATIC / "index.html"
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return VERSION
+    if _build_cache[0] != mtime:
+        m = re.search(r'/static/app\.js\?v=([^"&]+)"', path.read_text())
+        _build_cache = (mtime, m.group(1) if m else VERSION)
+    return _build_cache[1]
+
+
 @app.get("/api/ping")
 async def ping():
-    return {"ok": True, "version": VERSION}
+    return {"ok": True, "version": VERSION, "build": frontend_build()}
 
 
 # settings -------------------------------------------------------------------------

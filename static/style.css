@@ -322,6 +322,7 @@ body.watching .topbar { display: none; }
   .tabbar a.on { color: var(--text); }
   body.watching .tabbar { display: none; }
   #toast { bottom: calc(96px + var(--safe-b)); }
+  #updbar { bottom: calc(150px + var(--safe-b)); }
 
   .hero { margin-top: calc(-8px - var(--safe-t)); min-height: clamp(360px, 58svh, 520px); }
   .hero-bg::after { background: linear-gradient(0deg, var(--bg) 5%, rgba(11,13,18,.55) 55%, rgba(11,13,18,.2) 100%); }
@@ -433,6 +434,14 @@ body.watching .topbar { display: none; }
   font-size: .87em; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
   max-width: calc(100vw - 32px); }
 #netbar[hidden] { display: none; }
+#updbar { position: fixed; z-index: 79; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%);
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--accent); padding: 6px 6px 6px 16px; border-radius: 999px;
+  font-size: .9em; font-weight: 600; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  max-width: calc(100vw - 32px); width: max-content; }
+#updbar[hidden] { display: none; }
+#updbar button { border: 0; border-radius: 999px; font: inherit; cursor: pointer; }
+#updbar-go { background: var(--accent); color: var(--accent-ink); padding: 7px 14px; }
+#updbar-x { background: transparent; color: var(--muted); padding: 7px 9px; }
 .netdot { width: 8px; height: 8px; border-radius: 50%; background: #f2b84b; animation: blink 1.2s infinite; flex: none; }
 @keyframes blink { 50% { opacity: .3; } }
 

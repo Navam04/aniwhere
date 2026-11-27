@@ -412,6 +412,43 @@ async function pollServer() {
 window.addEventListener('offline', () => setOffline(true));
 window.addEventListener('online', () => { if (offline) fetch('/api/ping', { cache: 'no-store' }).then(r => r.ok && setOffline(false)).catch(() => {}); });
 
+// ---------- app updates ----------
+// A home-screen app on iPhone stays open in the background for days and has no reload button, so it would keep
+// running an old build after a deploy. The page knows the build it loaded (the ?v= stamp on app.js); when the
+// server reports a different one, offer a refresh. Never while a video is playing: it waits for the player to close.
+const LOADED_BUILD = (() => {
+  try { return new URL($('script[src*="/static/app.js"]').src).searchParams.get('v'); } catch { return null; }
+})();
+let newBuild = null, updDismissed = null;
+function showUpdateBar() {
+  $('#updbar').hidden = !newBuild || newBuild === updDismissed || location.hash.startsWith('#/watch');
+}
+async function checkForUpdate() {
+  if (!LOADED_BUILD || document.hidden) return;
+  try {
+    const r = await fetch('/api/ping', { cache: 'no-store' });
+    const p = r.ok ? await r.json() : null;
+    if (p?.build && p.build !== LOADED_BUILD) { newBuild = p.build; showUpdateBar(); }
+  } catch { /* offline: the connection banner covers it */ }
+}
+// Reload with the newest files. The service worker stays registered: push notifications depend on it.
+async function refreshApp() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+  } catch { /* no worker or offline: reloading still fetches the page */ }
+  try {
+    for (const k of await caches.keys()) await caches.delete(k);
+  } catch { /* Cache Storage unavailable */ }
+  location.reload();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
+window.addEventListener('hashchange', showUpdateBar);
+setInterval(checkForUpdate, 15 * 60 * 1000);
+setTimeout(checkForUpdate, 5000);
+$('#updbar-go').onclick = refreshApp;
+$('#updbar-x').onclick = () => { updDismissed = newBuild; showUpdateBar(); };
+
 // ---------- router ----------
 let cleanup = null;
 let routeId = 0;
@@ -1901,6 +1938,10 @@ async function viewSettings(stale) {
       ${s.profile?.is_owner ? `<section class="panel"><h3>Episodes kept on the server</h3><div id="cachebox" class="stack">${spinner()}</div></section>` : ''}
       <section class="panel"><h3>About</h3>
         <p class="muted">Aniwhere ${esc(s.version || '')}: watch anime anywhere, from your own server.</p>
+        <p class="muted">${/^\d{10}$/.test(LOADED_BUILD || '') ? `This copy was installed on the server ${esc(new Date(LOADED_BUILD * 1000).toLocaleString())}.`
+          : `Running build ${esc(LOADED_BUILD || '?')}.`} The app offers to refresh when a newer version is on the server; if something still
+          looks out of date, refresh it here. A home-screen app never needs to be added again.</p>
+        <div class="actions"><button class="btn ghost" id="refresh-app">Refresh app</button></div>
         <p class="muted">Made by <a class="linkish" href="https://navam.dev" target="_blank" rel="noopener">navam.dev</a> ·
           <a class="linkish" href="https://github.com/Navam04/aniwhere" target="_blank" rel="noopener">Source &amp; releases</a></p></section>
       ${isIOS && !isStandalone ? `<section class="panel"><h3>Add to home screen</h3>
@@ -2067,6 +2108,7 @@ async function viewSettings(stale) {
   });
   const test = $('#pushtest');
   if (test) test.onclick = e => busy(e.target, async () => { const r = await api('/api/push/test', { method: 'POST' }); toast(`Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}`); });
+  $('#refresh-app').onclick = e => { e.target.disabled = true; e.target.textContent = 'Refreshing…'; refreshApp(); };
   $('#upd').onclick = e => busy(e.target, async () => {
     e.target.textContent = 'Updating…';
     const r = await api('/api/system/update', { method: 'POST' });

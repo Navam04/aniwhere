@@ -39,6 +39,8 @@ behaves like an app. Everyone you let in gets their own lists, progress and sett
 - Filler tags and "Skip filler", stats and a yearly recap, TV mode for remotes (`?tv=1`)
 - **Looks after itself:** ani-cli updates daily, nightly database backups (last 7 kept), a Server health panel,
   and health alerts: a push notification to the owner when streaming, disk space or backups break, and when they're fixed
+- **Updates itself on your devices:** after an update the app offers a one-tap refresh (also in Settings), so a
+  home-screen app never has to be removed and added again
 
 ## Install
 
